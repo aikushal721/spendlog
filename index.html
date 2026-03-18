@@ -732,6 +732,40 @@ async function autoPullOnLoad(){
   await pullFromCloud(true);
 }
 
+// ─── Live sync every 15s + on tab focus ──────────────────────────────────────
+let liveTimer=null;
+function startLiveSync(){
+  if(liveTimer)clearInterval(liveTimer);
+  liveTimer=setInterval(async()=>{
+    if(getJBKey()&&getJBBin()&&!document.hidden){
+      await pullFromCloud(true);
+    }
+  },15000);
+}
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&getJBKey()&&getJBBin()){
+    pullFromCloud(true);
+  }
+});
+window.addEventListener('focus',()=>{
+  if(getJBKey()&&getJBBin())pullFromCloud(true);
+});
+
+// ─── Live sync indicator ─────────────────────────────────────────────────────
+function showLiveIndicator(){
+  const el=document.getElementById('sync-label');
+  if(!el)return;
+  let dots=0;
+  setInterval(()=>{
+    if(!getJBKey()||!getJBBin())return;
+    const last=LS.get('sl_last_sync');
+    const sec=last?Math.floor((Date.now()-last)/1000):null;
+    const dot=document.getElementById('sync-dot');
+    if(dot)dot.className='sync-dot green';
+    el.textContent='Live sync on · '+( sec!==null?(sec<5?'just now':sec+'s ago'):'never');
+  },2000);
+}
+
 // ─── Month nav ───────────────────────────────────────────────────────────────
 function changeMonth(dir){currentMonth+=dir;if(currentMonth<0){currentMonth=11;currentYear--;}if(currentMonth>11){currentMonth=0;currentYear++;}renderDashboard();}
 
@@ -743,6 +777,8 @@ renderQuickAdd();
 renderDashboard();
 updateSyncUI();
 autoPullOnLoad();
+startLiveSync();
+showLiveIndicator();
 </script>
 </body>
 </html>
