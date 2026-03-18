@@ -695,22 +695,27 @@ async function pushToCloud(){
   }catch(e){setSyncStatus('red','Sync failed — offline?');}
 }
 
-async function pullFromCloud(){
+async function pullFromCloud(silent=false){
   const key=getJBKey();const bin=getJBBin();
-  if(!key||!bin){toast('Not connected — set up sync in Settings','var(--amber)');return;}
+  if(!key||!bin){if(!silent)toast('Not connected — set up sync in Settings','var(--amber)');return;}
   try{
-    setSyncStatus('pulse','Pulling from cloud…');
+    if(!silent)setSyncStatus('pulse','Pulling from cloud…');
     const res=await fetch('https://api.jsonbin.io/v3/b/'+bin+'/latest',{headers:{'X-Master-Key':key}});
     const data=await res.json();
     if(data.record){
       const r=data.record;
-      if(!confirm('Replace local data with cloud version?'))return;
+      const cloudTime=r.lastUpdated?new Date(r.lastUpdated).getTime():0;
+      const localTime=LS.get('sl_last_sync')||0;
+      if(!silent&&cloudTime<=localTime){toast('Already up to date ✓');updateSyncUI();return;}
+      if(!silent&&!confirm('Replace local data with cloud version?'))return;
       expenses=r.expenses||[];recurring=r.recurring||[];categories=r.categories||categories;udharList=r.udharList||[];
       LS.set('sl_expenses',expenses);LS.set('sl_recurring',recurring);LS.set('sl_categories',categories);LS.set('sl_udhar',udharList);
-      LS.set('sl_last_sync',Date.now());updateSyncUI();
-      toast('Data pulled from cloud ☁️');renderDashboard();populateSelects();renderSettings();
-    }else{setSyncStatus('red','Pull failed');console.error(data);}
-  }catch(e){setSyncStatus('red','Pull failed — offline?');}
+      LS.set('sl_last_sync',Date.now());
+      updateSyncUI();renderDashboard();populateSelects();
+      if(!silent)toast('Data pulled from cloud ☁️');
+      else toast('Synced from cloud ☁️');
+    }else{if(!silent)setSyncStatus('red','Pull failed');}
+  }catch(e){if(!silent)setSyncStatus('red','Pull failed — offline?');}
 }
 
 let syncTimer=null;
@@ -718,6 +723,13 @@ function autoSync(){
   if(!getJBKey()||!getJBBin())return;
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>pushToCloud(),3000);
+}
+
+async function autoPullOnLoad(){
+  const key=getJBKey();const bin=getJBBin();
+  if(!key||!bin)return;
+  setSyncStatus('pulse','Syncing…');
+  await pullFromCloud(true);
 }
 
 // ─── Month nav ───────────────────────────────────────────────────────────────
@@ -730,6 +742,7 @@ setDefaultDate();
 renderQuickAdd();
 renderDashboard();
 updateSyncUI();
+autoPullOnLoad();
 </script>
 </body>
 </html>
